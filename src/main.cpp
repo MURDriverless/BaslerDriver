@@ -1,10 +1,18 @@
 #include <pylon/PylonIncludes.h>
 #include <GenApi/GenApi.h>
-#include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
 #include <iostream>
 #include <pthread.h>
 #include <unistd.h>
+
+#include <opencv4/opencv2/core.hpp>
+#include <opencv4/opencv2/core/mat.hpp>
+#include <opencv4/opencv2/highgui.hpp>
+#include <opencv4/opencv2/core/cuda.hpp>
+#include <opencv4/opencv2/cudaarithm.hpp>
+#include <opencv4/opencv2/cudaimgproc.hpp>
+#include <opencv4/opencv2/imgproc.hpp>
+
+#include <chrono>
 
 // Namespace for using pylon objects.
 using namespace Pylon;
@@ -14,15 +22,17 @@ using namespace std;
 
 CInstantCamera camera;
 
-void *ExposureLoop(void *) {
-    GenApi::INodeMap& nodemap = camera.GetNodeMap();
-    while (true) {
-        for (int i = 10; i < 20; i += 2) {
-            CFloatParameter(nodemap, "ExposureTime").SetValue(i*1000);
+const bool USE_CUDA = true;
 
-            sleep(1);
-        }
-    }
+void *ExposureLoop(void *) {
+    // GenApi::INodeMap& nodemap = camera.GetNodeMap();
+    // while (true) {
+    //     for (int i = 10; i < 20; i += 2) {
+    //         CFloatParameter(nodemap, "ExposureTime").SetValue(i*1000);
+
+    //         sleep(1);
+    //     }
+    // }
 }
 
 int main(int argc, char** argv) {
@@ -43,15 +53,16 @@ int main(int argc, char** argv) {
 
         // The parameter MaxNumBuffer can be used to control the count of buffers
         // allocated for grabbing. The default value of this parameter is 10.
-        camera.MaxNumBuffer = 5;
+        // camera.MaxNumBuffer = 1;
+
+        GenApi::INodeMap& nodemap = camera.GetNodeMap();
+
+        cout << "test" << endl;
 
         // Start the grabbing of c_countOfImagesToGrab images.
         // The camera device is parameterized with a default configuration which
         // sets up free-running continuous acquisition.
-        camera.StartGrabbing();
-        CImageFormatConverter formatConverter;//me
-        formatConverter.OutputPixelFormat = PixelType_BGR8packed;//me
-        CPylonImage pylonImage;//me
+        camera.StartGrabbing(GrabStrategy_LatestImageOnly);
 
         // This smart pointer will receive the grab result data.
         CGrabResultPtr ptrGrabResult;
@@ -61,6 +72,9 @@ int main(int argc, char** argv) {
 
         // Camera.StopGrabbing() is called automatically by the RetrieveResult() method
         // when c_countOfImagesToGrab images have been retrieved.
+
+        auto now = chrono::high_resolution_clock::now();
+
         while ( camera.IsGrabbing())
         {
             // Wait for an image and then retrieve it. A timeout of 5000 ms is used.
@@ -70,14 +84,30 @@ int main(int argc, char** argv) {
             if (ptrGrabResult->GrabSucceeded())
             {
                 // Access the image data.
-                cout << "SizeX: " << ptrGrabResult->GetWidth() << endl;
-                cout << "SizeY: " << ptrGrabResult->GetHeight() << endl;
-                const uint8_t *pImageBuffer = (uint8_t *) ptrGrabResult->GetBuffer();
-                cout << "Gray value of first pixel: " << (uint32_t) pImageBuffer[0] << endl << endl;
+                auto then = now;
+                now = chrono::high_resolution_clock::now();
+                auto deltaT = chrono::duration_cast<chrono::milliseconds>(now - then).count();
 
-                formatConverter.Convert(pylonImage, ptrGrabResult);
-                cv::Mat inMat = cv::Mat((int) ptrGrabResult->GetHeight(), (int) ptrGrabResult->GetWidth(), CV_8UC3, (uint8_t *) ptrGrabResult->GetBuffer());
-                cv::imshow("image", inMat);
+                cout << "Image ID: " << ptrGrabResult->GetImageNumber();
+                cout << ", FPS: " << 1000.0/deltaT << endl;
+
+                cv::Mat inMat = cv::Mat((int) ptrGrabResult->GetHeight(), (int) ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) ptrGrabResult->GetBuffer());
+                cv::Mat Mat16_RGB = cv::Mat((int) ptrGrabResult->GetHeight(), (int) ptrGrabResult->GetWidth(), CV_16UC3);
+
+                if (USE_CUDA) {
+                    cv::cuda::GpuMat src, dst;
+                    src.upload(inMat);
+                    cv::cuda::multiply(src, 64, dst);
+                    cv::cuda::cvtColor(dst, src, cv::COLOR_BayerRG2BGR);
+                    src.download(Mat16_RGB);
+                }
+                else {
+                    inMat = inMat.mul(16);
+                    cv::cvtColor(inMat, Mat16_RGB, cv::COLOR_BayerRG2BGR);
+                }
+
+
+                cv::imshow("image", Mat16_RGB);
                 cv::waitKey(1);
             }
             else
