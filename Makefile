@@ -10,8 +10,8 @@ LDFLAGS    += $(shell $(PYLON_ROOT)/bin/pylon-config --libs-rpath)
 LDLIBS     += $(shell $(PYLON_ROOT)/bin/pylon-config --libs)
 
 # OpenCV
-CPPFLAGS += `pkg-config --libs opencv`
-LDLIBS += `pkg-config --libs opencv`
+CPPFLAGS += `pkg-config --libs opencv4`
+LDLIBS += `pkg-config --libs opencv4`
 
 SRC_DIR := src
 OBJ_DIR := build
