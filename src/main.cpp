@@ -42,6 +42,27 @@ int main(int argc, char** argv) {
 
     Pylon::PylonAutoInitTerm autoInitTerm;
 
+    cv::FileStorage fs;
+    fs.open("../calibration.xml", cv::FileStorage::READ);
+
+    cv::Mat cameraMatrix;
+    cv::Mat distCoeffs;
+
+    fs["cameraMatrix"] >> cameraMatrix;
+    fs["distCoeffs"] >> distCoeffs;
+
+    fs.release();
+
+    cv::Mat newCameraMatrix = cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, cv::Size(1920, 1200), 0);
+    cv::Mat map1, map2;
+    cv::cuda::GpuMat map1_cuda, map2_cuda;
+
+    cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(), newCameraMatrix, cv::Size(1920, 1200), CV_32FC1, map1, map2);
+    map1_cuda.upload(map1);
+    map2_cuda.upload(map2);
+
+    std::cout << "Loaded calibration file" << std::endl;
+
     try
     {
 
@@ -81,6 +102,9 @@ int main(int argc, char** argv) {
 
         auto now = chrono::high_resolution_clock::now();
 
+        cv::namedWindow("Camera_Undist", 0);
+        cv::namedWindow("Camera_Raw", 0);
+
         while ( camera.IsGrabbing())
         {
             // Wait for an image and then retrieve it. A timeout of 5000 ms is used.
@@ -97,23 +121,38 @@ int main(int argc, char** argv) {
                 cout << "Image ID: " << ptrGrabResult->GetImageNumber();
                 cout << ", FPS: " << 1000.0/deltaT << endl;
 
-                cv::Mat inMat = cv::Mat((int) ptrGrabResult->GetHeight(), (int) ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) ptrGrabResult->GetBuffer());
-                cv::Mat Mat16_RGB = cv::Mat((int) ptrGrabResult->GetHeight(), (int) ptrGrabResult->GetWidth(), CV_16UC3);
+                int height = (int) ptrGrabResult->GetHeight();
+                int width = (int) ptrGrabResult->GetWidth();
+
+                cv::Mat inMat = cv::Mat(height, width, CV_16UC1, (uint16_t *) ptrGrabResult->GetBuffer());
+                cv::Mat unDist = cv::Mat(height, width, CV_16UC1);
+                cv::Mat Mat16_RGB = cv::Mat(height, width, CV_16UC3);
 
                 if (USE_CUDA) {
                     cv::cuda::GpuMat src, dst;
                     src.upload(inMat);
+                    
                     cv::cuda::multiply(src, 64, dst);
                     cv::cuda::cvtColor(dst, src, cv::COLOR_BayerRG2BGR);
+                    cv::cuda::remap(src, dst, map1_cuda, map2_cuda, cv::INTER_NEAREST);
+
                     src.download(Mat16_RGB);
+                    dst.download(unDist);
                 }
                 else {
-                    inMat = inMat.mul(16);
+                    inMat = inMat.mul(64);
+                    // cv::undistort(inMat, unDist, cameraMatrix, distCoeffs, newCameraMatrix);
                     cv::cvtColor(inMat, Mat16_RGB, cv::COLOR_BayerRG2BGR);
+                    cv::remap(Mat16_RGB, unDist, map1, map2, cv::INTER_CUBIC);
                 }
 
 
-                cv::imshow("image", Mat16_RGB);
+                cv::imshow("Camera_Undist", unDist);
+                cv::resizeWindow("Camera_Undist", 1200, 600);
+
+                cv::imshow("Camera_Raw", Mat16_RGB);
+                cv::resizeWindow("Camera_Raw", 1200, 600);
+
                 cv::waitKey(1);
             }
             else
