@@ -14,4 +14,7 @@ add_executable( main src/main.cpp )
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-target_link_libraries( main ${OpenCV_LIBS} ${Pylon_LIBRARIES} Threads::Threads)
+target_link_libraries( main 
+    ${OpenCV_LIBS} 
+    ${Pylon_LIBRARIES} 
+    Threads::Threads)
