@@ -57,7 +57,11 @@ int main(int argc, char** argv) {
         // allocated for grabbing. The default value of this parameter is 10.
         // camera.MaxNumBuffer = 1;
 
+        camera.Open();
         GenApi::INodeMap& nodemap = camera.GetNodeMap();
+        CEnumParameter(nodemap, "PixelFormat").SetValue("BayerBG10");
+        CBooleanParameter(nodemap, "AcquisitionFrameRateEnable").SetValue(false);
+        camera.Close();
 
         cout << "test" << endl;
 
