@@ -4,13 +4,15 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include <opencv4/opencv2/core.hpp>
-#include <opencv4/opencv2/core/mat.hpp>
-#include <opencv4/opencv2/highgui.hpp>
-#include <opencv4/opencv2/core/cuda.hpp>
-#include <opencv4/opencv2/cudaarithm.hpp>
-#include <opencv4/opencv2/cudaimgproc.hpp>
-#include <opencv4/opencv2/imgproc.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/core/mat.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudawarping.hpp>
+#include <opencv2/cudaarithm.hpp>
+#include <opencv2/cudaimgproc.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/calib3d.hpp>
 
 #include <chrono>
 
