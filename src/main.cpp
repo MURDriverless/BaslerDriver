@@ -6,6 +6,7 @@
 
 #include <opencv2/core.hpp>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/core/utility.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudawarping.hpp>
@@ -24,7 +25,7 @@ using namespace std;
 
 CInstantCamera camera;
 
-const bool USE_CUDA = true;
+const enum cv::InterpolationFlags interpMode = cv::INTER_CUBIC;
 
 void *ExposureLoop(void *) {
     // GenApi::INodeMap& nodemap = camera.GetNodeMap();
@@ -40,7 +41,15 @@ void *ExposureLoop(void *) {
 int main(int argc, char** argv) {
     int exitCode;
 
-    Pylon::PylonAutoInitTerm autoInitTerm;
+    const bool USE_CUDA = true;
+    int numCores = -1;
+
+    if (argc > 1) {
+        numCores = atoi(argv[1]);
+    }
+
+    cv::setNumThreads(numCores);
+    Pylon::PylonInitialize();
 
     cv::FileStorage fs;
     fs.open("../calibration.xml", cv::FileStorage::READ);
@@ -84,12 +93,32 @@ int main(int argc, char** argv) {
         CBooleanParameter(nodemap, "AcquisitionFrameRateEnable").SetValue(false);
         camera.Close();
 
-        cout << "test" << endl;
+        switch (interpMode) {
+            case (cv::INTER_NEAREST):
+                cout << "Nearest Interp" << endl;
+                break;
+            case (cv::INTER_LINEAR):
+                cout << "Linear Interp" << endl;
+                break;
+            case (cv::INTER_CUBIC):
+                cout << "Cubic Interp" << endl;
+                break;
+            default:
+                cout << "Invalid Interp" << endl;
+                return 1;
+        }
+
+        if (USE_CUDA) {
+            cout << "Using CUDA" << endl;
+        }
+        else {
+            cout << "CPU with " << numCores << " threads" << endl;
+        }
 
         // Start the grabbing of c_countOfImagesToGrab images.
         // The camera device is parameterized with a default configuration which
         // sets up free-running continuous acquisition.
-        camera.StartGrabbing(GrabStrategy_LatestImageOnly);
+        camera.StartGrabbing(100, GrabStrategy_LatestImageOnly);
 
         // This smart pointer will receive the grab result data.
         CGrabResultPtr ptrGrabResult;
@@ -116,10 +145,10 @@ int main(int argc, char** argv) {
                 // Access the image data.
                 auto then = now;
                 now = chrono::high_resolution_clock::now();
-                auto deltaT = chrono::duration_cast<chrono::milliseconds>(now - then).count();
+                auto deltaT = chrono::duration_cast<chrono::microseconds>(now - then).count();
 
                 cout << "Image ID: " << ptrGrabResult->GetImageNumber();
-                cout << ", FPS: " << 1000.0/deltaT << endl;
+                cout << "\tReal Frame Time (us): " << setw(10) << deltaT;
 
                 int height = (int) ptrGrabResult->GetHeight();
                 int width = (int) ptrGrabResult->GetWidth();
@@ -134,26 +163,31 @@ int main(int argc, char** argv) {
                     
                     cv::cuda::multiply(src, 64, dst);
                     cv::cuda::cvtColor(dst, src, cv::COLOR_BayerRG2BGR);
-                    cv::cuda::remap(src, dst, map1_cuda, map2_cuda, cv::INTER_NEAREST);
+                    cv::cuda::remap(src, dst, map1_cuda, map2_cuda, interpMode);
 
-                    src.download(Mat16_RGB);
+                    // src.download(Mat16_RGB);
                     dst.download(unDist);
                 }
                 else {
                     inMat = inMat.mul(64);
-                    // cv::undistort(inMat, unDist, cameraMatrix, distCoeffs, newCameraMatrix);
+
                     cv::cvtColor(inMat, Mat16_RGB, cv::COLOR_BayerRG2BGR);
-                    cv::remap(Mat16_RGB, unDist, map1, map2, cv::INTER_CUBIC);
+                    cv::remap(Mat16_RGB, unDist, map1, map2, interpMode);
                 }
 
+                auto now2 = chrono::high_resolution_clock::now();
+                deltaT = chrono::duration_cast<chrono::microseconds>(now2 - now).count();
 
-                cv::imshow("Camera_Undist", unDist);
-                cv::resizeWindow("Camera_Undist", 1200, 600);
+                cout << "\tFrame Time (us): "  << setw(10) << deltaT << endl;
 
-                cv::imshow("Camera_Raw", Mat16_RGB);
-                cv::resizeWindow("Camera_Raw", 1200, 600);
+                // cv::imshow("Camera_Undist", unDist);
+                // cv::resizeWindow("Camera_Undist", 1200, 600);
 
-                cv::waitKey(1);
+                // cv::imshow("Camera_Raw", Mat16_RGB);
+                // cv::resizeWindow("Camera_Raw", 1200, 600);
+
+                // cv::waitKey(1);
+
             }
             else
             {
@@ -169,9 +203,11 @@ int main(int argc, char** argv) {
         exitCode = 1;
     }
 
-    // Comment the following two lines to disable waiting on exit.
-    cerr << endl << "Press enter to exit." << endl;
-    while( cin.get() != '\n');
+    // // Comment the following two lines to disable waiting on exit.
+    // cerr << endl << "Press enter to exit." << endl;
+    // while( cin.get() != '\n');
+
+    Pylon::PylonTerminate();
 
     return exitCode;
 }
