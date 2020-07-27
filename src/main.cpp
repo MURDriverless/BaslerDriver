@@ -17,6 +17,8 @@
 
 #include <chrono>
 
+#include "Yolo3Detection.h"
+
 // Namespace for using pylon objects.
 using namespace Pylon;
 
@@ -26,6 +28,13 @@ using namespace std;
 CInstantCamera camera;
 
 const enum cv::InterpolationFlags interpMode = cv::INTER_CUBIC;
+
+tk::dnn::Yolo3Detection yolo;
+tk::dnn::DetectionNN *detNN;
+std::vector<tk::dnn::box> bbox;
+
+static const int n_classes = 3;
+static const int n_batch = 1;
 
 void *ExposureLoop(void *) {
     // GenApi::INodeMap& nodemap = camera.GetNodeMap();
@@ -49,6 +58,8 @@ int main(int argc, char** argv) {
     }
 
     cv::setNumThreads(numCores);
+
+    // Camera Setup
     Pylon::PylonInitialize();
 
     cv::FileStorage fs;
@@ -62,6 +73,7 @@ int main(int argc, char** argv) {
 
     fs.release();
 
+    // OpenCV Setup
     cv::Mat newCameraMatrix = cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, cv::Size(1920, 1200), 0);
     cv::Mat map1, map2;
     cv::cuda::GpuMat map1_cuda, map2_cuda;
@@ -71,6 +83,10 @@ int main(int argc, char** argv) {
     map2_cuda.upload(map2);
 
     std::cout << "Loaded calibration file" << std::endl;
+
+    // tkdnn setup
+    detNN = &yolo;
+    assert(detNN->init("../models/yolo4_cones_int8.rt", n_classes, n_batch));
 
     try
     {
@@ -118,7 +134,7 @@ int main(int argc, char** argv) {
         // Start the grabbing of c_countOfImagesToGrab images.
         // The camera device is parameterized with a default configuration which
         // sets up free-running continuous acquisition.
-        camera.StartGrabbing(100, GrabStrategy_LatestImageOnly);
+        camera.StartGrabbing(GrabStrategy_LatestImageOnly);
 
         // This smart pointer will receive the grab result data.
         CGrabResultPtr ptrGrabResult;
@@ -132,7 +148,6 @@ int main(int argc, char** argv) {
         auto now = chrono::high_resolution_clock::now();
 
         cv::namedWindow("Camera_Undist", 0);
-        cv::namedWindow("Camera_Raw", 0);
 
         while ( camera.IsGrabbing())
         {
@@ -148,7 +163,7 @@ int main(int argc, char** argv) {
                 auto deltaT = chrono::duration_cast<chrono::microseconds>(now - then).count();
 
                 cout << "Image ID: " << ptrGrabResult->GetImageNumber();
-                cout << "\tReal Frame Time (us): " << setw(10) << deltaT;
+                cout << "\tReal Frame Rate: " << setw(10) << 1e6/deltaT;
 
                 int height = (int) ptrGrabResult->GetHeight();
                 int width = (int) ptrGrabResult->GetWidth();
@@ -164,9 +179,9 @@ int main(int argc, char** argv) {
                     cv::cuda::multiply(src, 64, dst);
                     cv::cuda::cvtColor(dst, src, cv::COLOR_BayerRG2BGR);
                     cv::cuda::remap(src, dst, map1_cuda, map2_cuda, interpMode);
+                    dst.convertTo(src, CV_8UC3, 1/256.0);
 
-                    // src.download(Mat16_RGB);
-                    dst.download(unDist);
+                    src.download(unDist);
                 }
                 else {
                     inMat = inMat.mul(64);
@@ -178,16 +193,29 @@ int main(int argc, char** argv) {
                 auto now2 = chrono::high_resolution_clock::now();
                 deltaT = chrono::duration_cast<chrono::microseconds>(now2 - now).count();
 
-                cout << "\tFrame Time (us): "  << setw(10) << deltaT << endl;
+                cout << "\tFrame Time (us): "  << setw(10) << deltaT;
 
-                // cv::imshow("Camera_Undist", unDist);
-                // cv::resizeWindow("Camera_Undist", 1200, 600);
+                std::vector<cv::Mat> batch_frame;
+                std::vector<cv::Mat> batch_dnn_input;
 
-                // cv::imshow("Camera_Raw", Mat16_RGB);
-                // cv::resizeWindow("Camera_Raw", 1200, 600);
+                // batch frame will be used for image output
+                batch_frame.push_back(unDist);
 
-                // cv::waitKey(1);
+                // dnn input will be resized to network format
+                batch_dnn_input.push_back(unDist.clone());
 
+                // network inference
+                detNN->update(batch_dnn_input, n_batch);
+                detNN->draw(batch_frame);
+
+                cout << " " << setw(5) << detNN->batchDetected[0].size() << " objects detected.";
+
+                cv::imshow("Camera_Undist", batch_frame[0]);
+                cv::resizeWindow("Camera_Undist", 1200, 600);
+
+                cv::waitKey(1);
+
+                cout << endl;
             }
             else
             {
