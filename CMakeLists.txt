@@ -1,8 +1,15 @@
 cmake_minimum_required(VERSION 2.8)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 project( main )
 
-find_package( OpenCV 4.1.2 REQUIRED )
+find_package( OpenCV 4.0.0 REQUIRED )
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
 
 include_directories(
