@@ -2,3 +2,4 @@ main
 
 .vscode/**
 build/**
+models/yolo4_cones_int8.rt
