@@ -51,10 +51,61 @@ int main(int argc, char** argv) {
     }
 
     auto device = devices.at(0)->OpenDevice(peak::core::DeviceAccessType::Control);
-    auto dataStream = device->DataStreams().at(0)->OpenDataStream();
-    dataStream->StartAcquisition(peak::core::AcquisitionStartMode::Default);
-
+    auto nodeMapRemoteDevice = device->RemoteDevice()->NodeMaps().at(0);
     
+    auto dataStream = device->DataStreams().at(0)->OpenDataStream();
+    // get payload size
+    auto payloadSize = nodeMapRemoteDevice->FindNode<peak::core::nodes::IntegerNode>("PayloadSize")->Value();
+
+    nodeMapRemoteDevice->FindNode<peak::core::nodes::EnumerationNode>("PixelFormat")->SetCurrentEntry("Mono8");
+    
+    // get number of buffers to allocate
+    // the buffer count depends on your application, here the minimum required number for the data stream
+    auto bufferCountMax = dataStream->NumBuffersAnnouncedMinRequired();
+    
+    // allocate and announce image buffers and queue them
+    for (uint64_t bufferCount = 0; bufferCount < bufferCountMax; ++bufferCount)
+    {
+        auto buffer = dataStream->AllocAndAnnounceBuffer(static_cast<size_t>(payloadSize), nullptr);
+        dataStream->QueueBuffer(buffer);
+    }
+
+    dataStream->StartAcquisition(peak::core::AcquisitionStartMode::Default);
+    
+    // start the device
+    nodeMapRemoteDevice->FindNode<peak::core::nodes::CommandNode>("AcquisitionStart")->Execute();
+    
+    // the acquisition loop
+    bool is_running = true;
+    while (is_running)
+    {
+        // get buffer from data stream and process it
+        auto buffer = dataStream->WaitForFinishedBuffer(5000);
+        
+        size_t width = buffer->Width();
+        size_t height = buffer->Height();
+        cv::Mat mat(height, width, CV_8UC1, static_cast<u_int8_t*>(buffer->BasePtr()));
+
+        cv::imshow("ehh", mat);
+        cv::waitKey(1);
+
+        dataStream->QueueBuffer(buffer);
+    }
+
+    // stop the data stream
+    dataStream->StopAcquisition(peak::core::AcquisitionStopMode::Default);
+    
+    // stop the device
+    nodeMapRemoteDevice->FindNode<peak::core::nodes::CommandNode>("AcquisitionStop")->Execute();
+    
+    // flush all buffers
+    dataStream->Flush(peak::core::DataStreamFlushMode::DiscardAll);
+    
+    // revoke all buffers
+    for (const auto& buffer : dataStream->AnnouncedBuffers())
+    {
+        dataStream->RevokeBuffer(buffer);
+    }
 
     peak::Library::Close();
 
