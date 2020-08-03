@@ -1,5 +1,3 @@
-#include <pylon/PylonIncludes.h>
-#include <GenApi/GenApi.h>
 #include <iostream>
 #include <pthread.h>
 #include <unistd.h>
@@ -17,26 +15,13 @@
 
 #include <chrono>
 
-// Namespace for using pylon objects.
-using namespace Pylon;
+#include "GeniWrap.hpp"
+#include "GeniPylon.hpp"
 
 // Namespace for using cout.
 using namespace std;
 
-CInstantCamera camera;
-
 const enum cv::InterpolationFlags interpMode = cv::INTER_CUBIC;
-
-void *ExposureLoop(void *) {
-    // GenApi::INodeMap& nodemap = camera.GetNodeMap();
-    // while (true) {
-    //     for (int i = 10; i < 20; i += 2) {
-    //         CFloatParameter(nodemap, "ExposureTime").SetValue(i*1000);
-
-    //         sleep(1);
-    //     }
-    // }
-}
 
 int main(int argc, char** argv) {
     int exitCode;
@@ -49,7 +34,9 @@ int main(int argc, char** argv) {
     }
 
     cv::setNumThreads(numCores);
-    Pylon::PylonInitialize();
+    
+    IGeniCam* camera = new PylonCam();
+    camera->initializeLibrary();
 
     cv::FileStorage fs;
     fs.open("../calibration.xml", cv::FileStorage::READ);
@@ -74,24 +61,7 @@ int main(int argc, char** argv) {
 
     try
     {
-
-        CTlFactory& TlFactory = CTlFactory::GetInstance();
-        CDeviceInfo di;
-        di.SetFriendlyName("CameraLeft (40022599)");
-        camera.Attach(TlFactory.CreateDevice(di));
-
-        // Print the model name of the camera.
-        cout << "Using device " << camera.GetDeviceInfo().GetModelName() << endl;
-
-        // The parameter MaxNumBuffer can be used to control the count of buffers
-        // allocated for grabbing. The default value of this parameter is 10.
-        // camera.MaxNumBuffer = 1;
-
-        camera.Open();
-        GenApi::INodeMap& nodemap = camera.GetNodeMap();
-        CEnumParameter(nodemap, "PixelFormat").SetValue("BayerBG10");
-        CBooleanParameter(nodemap, "AcquisitionFrameRateEnable").SetValue(false);
-        camera.Close();
+        camera->setup("CameraLeft (40022599)");
 
         switch (interpMode) {
             case (cv::INTER_NEAREST):
@@ -115,64 +85,49 @@ int main(int argc, char** argv) {
             cout << "CPU with " << numCores << " threads" << endl;
         }
 
-        // Start the grabbing of c_countOfImagesToGrab images.
-        // The camera device is parameterized with a default configuration which
-        // sets up free-running continuous acquisition.
-        camera.StartGrabbing(100, GrabStrategy_LatestImageOnly);
-
-        // This smart pointer will receive the grab result data.
-        CGrabResultPtr ptrGrabResult;
-
-        pthread_t thread;
-        pthread_create(&thread, NULL, ExposureLoop, NULL);
-
-        // Camera.StopGrabbing() is called automatically by the RetrieveResult() method
-        // when c_countOfImagesToGrab images have been retrieved.
+        camera->startGrabbing();
 
         auto now = chrono::high_resolution_clock::now();
 
         cv::namedWindow("Camera_Undist", 0);
         cv::namedWindow("Camera_Raw", 0);
 
-        while ( camera.IsGrabbing())
+        int imageCount = 0;
+
+        while ( camera->isGrabbing())
         {
-            // Wait for an image and then retrieve it. A timeout of 5000 ms is used.
-            camera.RetrieveResult( 5000, ptrGrabResult, TimeoutHandling_ThrowException);
+            int height, width;
+            uint8_t* buffer;
+
+            bool ret = camera->retreiveResult(height, width, buffer);
 
             // Image grabbed successfully?
-            if (ptrGrabResult->GrabSucceeded())
+            if (ret)
             {
                 // Access the image data.
                 auto then = now;
                 now = chrono::high_resolution_clock::now();
                 auto deltaT = chrono::duration_cast<chrono::microseconds>(now - then).count();
 
-                cout << "Image ID: " << ptrGrabResult->GetImageNumber();
+                cout << "Image ID: " << imageCount++;
                 cout << "\tReal Frame Time (us): " << setw(10) << deltaT;
 
-                int height = (int) ptrGrabResult->GetHeight();
-                int width = (int) ptrGrabResult->GetWidth();
-
-                cv::Mat inMat = cv::Mat(height, width, CV_16UC1, (uint16_t *) ptrGrabResult->GetBuffer());
-                cv::Mat unDist = cv::Mat(height, width, CV_16UC1);
-                cv::Mat Mat16_RGB = cv::Mat(height, width, CV_16UC3);
+                cv::Mat inMat = cv::Mat(height, width, CV_8UC1, buffer);
+                cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
+                cv::Mat Mat_RGB = cv::Mat(height, width, CV_8UC3);
 
                 if (USE_CUDA) {
                     cv::cuda::GpuMat src, dst;
                     src.upload(inMat);
                     
-                    cv::cuda::multiply(src, 64, dst);
-                    cv::cuda::cvtColor(dst, src, cv::COLOR_BayerRG2BGR);
-                    cv::cuda::remap(src, dst, map1_cuda, map2_cuda, interpMode);
+                    cv::cuda::cvtColor(src, dst, cv::COLOR_BayerRG2BGR);
+                    cv::cuda::remap(dst, src, map1_cuda, map2_cuda, interpMode);
 
-                    // src.download(Mat16_RGB);
-                    dst.download(unDist);
+                    src.download(unDist);
                 }
                 else {
-                    inMat = inMat.mul(64);
-
-                    cv::cvtColor(inMat, Mat16_RGB, cv::COLOR_BayerRG2BGR);
-                    cv::remap(Mat16_RGB, unDist, map1, map2, interpMode);
+                    cv::cvtColor(inMat, Mat_RGB, cv::COLOR_BayerRG2BGR);
+                    cv::remap(Mat_RGB, unDist, map1, map2, interpMode);
                 }
 
                 auto now2 = chrono::high_resolution_clock::now();
@@ -180,34 +135,31 @@ int main(int argc, char** argv) {
 
                 cout << "\tFrame Time (us): "  << setw(10) << deltaT << endl;
 
-                // cv::imshow("Camera_Undist", unDist);
-                // cv::resizeWindow("Camera_Undist", 1200, 600);
+                cv::imshow("Camera_Undist", unDist);
+                cv::resizeWindow("Camera_Undist", 1200, 600);
 
                 // cv::imshow("Camera_Raw", Mat16_RGB);
                 // cv::resizeWindow("Camera_Raw", 1200, 600);
 
-                // cv::waitKey(1);
+                cv::waitKey(1);
 
+                camera->clearResult();
             }
             else
             {
-                cout << "Error: " << ptrGrabResult->GetErrorCode() << " " << ptrGrabResult->GetErrorDescription() << endl;
+                cout << "Error" << endl;
             }
         }
     }
-    catch (const GenericException &e)
+    catch (const exception &e)
     {
         // Error handling.
-        cerr << "An exception occurred." << endl
-        << e.GetDescription() << endl;
+        cerr << "An exception occurred." << endl << e.what() << endl;
         exitCode = 1;
     }
 
-    // // Comment the following two lines to disable waiting on exit.
-    // cerr << endl << "Press enter to exit." << endl;
-    // while( cin.get() != '\n');
-
-    Pylon::PylonTerminate();
+    camera->finalizeLibrary();
+    free(camera);
 
     return exitCode;
 }

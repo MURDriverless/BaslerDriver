@@ -13,10 +13,19 @@ find_package( OpenCV 4.0.0 REQUIRED )
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
 
 include_directories(
+    src/
     ${OpenCV_INCLUDE_DIRS}
     ${Pylon_INCLUDE_DIRS} )
 
-add_executable( main src/main.cpp )
+file(GLOB SOURCES
+    src/*.hpp
+    src/*.cpp
+)
+
+
+add_executable( 
+  main 
+  ${SOURCES} )
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
