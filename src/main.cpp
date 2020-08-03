@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
 
         camera.Open();
         GenApi::INodeMap& nodemap = camera.GetNodeMap();
-        CEnumParameter(nodemap, "PixelFormat").SetValue("BayerBG10");
+        CEnumParameter(nodemap, "PixelFormat").SetValue("BayerBG8");
         CBooleanParameter(nodemap, "AcquisitionFrameRateEnable").SetValue(false);
         camera.Close();
 
@@ -154,26 +154,22 @@ int main(int argc, char** argv) {
                 int height = (int) ptrGrabResult->GetHeight();
                 int width = (int) ptrGrabResult->GetWidth();
 
-                cv::Mat inMat = cv::Mat(height, width, CV_16UC1, (uint16_t *) ptrGrabResult->GetBuffer());
-                cv::Mat unDist = cv::Mat(height, width, CV_16UC1);
-                cv::Mat Mat16_RGB = cv::Mat(height, width, CV_16UC3);
+                cv::Mat inMat = cv::Mat(height, width, CV_8UC1, static_cast<uint8_t *>(ptrGrabResult->GetBuffer()));
+                cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
+                cv::Mat Mat_RGB = cv::Mat(height, width, CV_8UC3);
 
                 if (USE_CUDA) {
                     cv::cuda::GpuMat src, dst;
                     src.upload(inMat);
                     
-                    cv::cuda::multiply(src, 64, dst);
-                    cv::cuda::cvtColor(dst, src, cv::COLOR_BayerRG2BGR);
-                    cv::cuda::remap(src, dst, map1_cuda, map2_cuda, interpMode);
-                    dst.convertTo(src, CV_8UC3, 1/256.0);
+                    cv::cuda::cvtColor(src, dst, cv::COLOR_BayerRG2BGR);
+                    cv::cuda::remap(dst, src, map1_cuda, map2_cuda, interpMode);
 
                     src.download(unDist);
                 }
                 else {
-                    inMat = inMat.mul(64);
-
-                    cv::cvtColor(inMat, Mat16_RGB, cv::COLOR_BayerRG2BGR);
-                    cv::remap(Mat16_RGB, unDist, map1, map2, interpMode);
+                    cv::cvtColor(inMat, Mat_RGB, cv::COLOR_BayerRG2BGR);
+                    cv::remap(Mat_RGB, unDist, map1, map2, interpMode);
                 }
 
                 auto now2 = chrono::high_resolution_clock::now();
