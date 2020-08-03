@@ -10,6 +10,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 project( main )
 
 find_package( OpenCV 4.0.0 REQUIRED )
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindIDSPeak.cmake")
 
 include_directories(

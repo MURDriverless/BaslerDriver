@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <pthread.h>
 #include <unistd.h>
 
@@ -16,7 +17,7 @@
 #include <chrono>
 
 #include "GeniWrap.hpp"
-#include "GeniPylon.hpp"
+#include "GeniIDS.hpp"
 
 // Namespace for using cout.
 using namespace std;
@@ -35,7 +36,7 @@ int main(int argc, char** argv) {
 
     cv::setNumThreads(numCores);
     
-    IGeniCam* camera = new PylonCam();
+    IGeniCam* camera = new IDSCam();
     camera->initializeLibrary();
 
     cv::FileStorage fs;
@@ -85,7 +86,7 @@ int main(int argc, char** argv) {
             cout << "CPU with " << numCores << " threads" << endl;
         }
 
-        camera->startGrabbing();
+        camera->startGrabbing(50);
 
         auto now = chrono::high_resolution_clock::now();
 
@@ -94,7 +95,7 @@ int main(int argc, char** argv) {
 
         int imageCount = 0;
 
-        while ( camera->isGrabbing())
+        while (imageCount < 50 &&  camera->isGrabbing())
         {
             int height, width;
             uint8_t* buffer;
@@ -159,7 +160,7 @@ int main(int argc, char** argv) {
     }
 
     camera->finalizeLibrary();
-    free(camera);
+    delete camera;
 
     return exitCode;
 }
