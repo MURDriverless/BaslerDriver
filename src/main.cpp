@@ -36,17 +36,6 @@ std::vector<tk::dnn::box> bbox;
 static const int n_classes = 3;
 static const int n_batch = 1;
 
-void *ExposureLoop(void *) {
-    // GenApi::INodeMap& nodemap = camera.GetNodeMap();
-    // while (true) {
-    //     for (int i = 10; i < 20; i += 2) {
-    //         CFloatParameter(nodemap, "ExposureTime").SetValue(i*1000);
-
-    //         sleep(1);
-    //     }
-    // }
-}
-
 int main(int argc, char** argv) {
     int exitCode;
 
@@ -138,9 +127,6 @@ int main(int argc, char** argv) {
 
         // This smart pointer will receive the grab result data.
         CGrabResultPtr ptrGrabResult;
-
-        pthread_t thread;
-        pthread_create(&thread, NULL, ExposureLoop, NULL);
 
         // Camera.StopGrabbing() is called automatically by the RetrieveResult() method
         // when c_countOfImagesToGrab images have been retrieved.
