@@ -17,6 +17,8 @@
 #include <opencv2/calib3d.hpp>
 
 #include <chrono>
+#include <vector>
+#include <algorithm>
 
 
 // Namespace for using cout.
@@ -36,21 +38,23 @@ int main(int argc, char** argv) {
 
     cv::setNumThreads(numCores);
 
+
     peak::Library::Initialize();
 
-    auto ehh = peak::core::EnvironmentInspector::CollectCTIPaths();
-
-    for (auto ehh2 : ehh) {
-        cout << ehh2 << endl;
-    }
-
     auto& deviceManager = peak::DeviceManager::Instance();
-    deviceManager.Update();
+    deviceManager.AddProducerLibrary("/usr/lib/ids/cti/ids_u3vgentl.cti");
+    deviceManager.Update(peak::DeviceManager::UpdatePolicy::DontScanEnvironmentForProducerLibraries);
     auto devices = deviceManager.Devices();
 
     for (auto device : devices) {
         cout << device->DisplayName() << endl;
     }
+
+    auto device = devices.at(0)->OpenDevice(peak::core::DeviceAccessType::Control);
+    auto dataStream = device->DataStreams().at(0)->OpenDataStream();
+    dataStream->StartAcquisition(peak::core::AcquisitionStartMode::Default);
+
+    
 
     peak::Library::Close();
 
