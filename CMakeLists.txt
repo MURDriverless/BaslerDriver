@@ -10,12 +10,15 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 project( main )
 
 find_package( OpenCV 4.0.0 REQUIRED )
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindIDSPeak.cmake")
 
 include_directories(
     src/
     ${OpenCV_INCLUDE_DIRS}
-    ${Pylon_INCLUDE_DIRS} )
+    ${Pylon_INCLUDE_DIRS}
+    ${IDS_INCLUDE_DIR}
+    ${IDS_LIBRARIES}
+    )
 
 file(GLOB SOURCES
     src/*.hpp
@@ -33,4 +36,5 @@ find_package(Threads REQUIRED)
 target_link_libraries( main 
     ${OpenCV_LIBS} 
     ${Pylon_LIBRARIES} 
+    ids_peak
     Threads::Threads)

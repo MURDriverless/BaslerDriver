@@ -14,6 +14,8 @@
 #include <opencv2/calib3d.hpp>
 
 #include <chrono>
+#include <vector>
+#include <algorithm>
 
 #include "GeniWrap.hpp"
 #include "GeniPylon.hpp"
@@ -38,28 +40,46 @@ int main(int argc, char** argv) {
     IGeniCam* camera = new PylonCam();
     camera->initializeLibrary();
 
-    cv::FileStorage fs;
-    fs.open("../calibration.xml", cv::FileStorage::READ);
 
-    cv::Mat cameraMatrix;
-    cv::Mat distCoeffs;
+    peak::Library::Initialize();
 
-    fs["cameraMatrix"] >> cameraMatrix;
-    fs["distCoeffs"] >> distCoeffs;
+    auto& deviceManager = peak::DeviceManager::Instance();
+    deviceManager.AddProducerLibrary("/usr/lib/ids/cti/ids_u3vgentl.cti");
+    deviceManager.Update(peak::DeviceManager::UpdatePolicy::DontScanEnvironmentForProducerLibraries);
+    auto devices = deviceManager.Devices();
 
-    fs.release();
+    for (auto device : devices) {
+        cout << device->DisplayName() << endl;
+    }
 
-    cv::Mat newCameraMatrix = cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, cv::Size(1920, 1200), 0);
-    cv::Mat map1, map2;
-    cv::cuda::GpuMat map1_cuda, map2_cuda;
+    auto device = devices.at(0)->OpenDevice(peak::core::DeviceAccessType::Control);
+    auto nodeMapRemoteDevice = device->RemoteDevice()->NodeMaps().at(0);
+    
+    auto dataStream = device->DataStreams().at(0)->OpenDataStream();
+    // get payload size
+    auto payloadSize = nodeMapRemoteDevice->FindNode<peak::core::nodes::IntegerNode>("PayloadSize")->Value();
 
-    cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(), newCameraMatrix, cv::Size(1920, 1200), CV_32FC1, map1, map2);
-    map1_cuda.upload(map1);
-    map2_cuda.upload(map2);
+    nodeMapRemoteDevice->FindNode<peak::core::nodes::EnumerationNode>("PixelFormat")->SetCurrentEntry("Mono8");
+    
+    // get number of buffers to allocate
+    // the buffer count depends on your application, here the minimum required number for the data stream
+    auto bufferCountMax = dataStream->NumBuffersAnnouncedMinRequired();
+    
+    // allocate and announce image buffers and queue them
+    for (uint64_t bufferCount = 0; bufferCount < bufferCountMax; ++bufferCount)
+    {
+        auto buffer = dataStream->AllocAndAnnounceBuffer(static_cast<size_t>(payloadSize), nullptr);
+        dataStream->QueueBuffer(buffer);
+    }
 
-    std::cout << "Loaded calibration file" << std::endl;
-
-    try
+    dataStream->StartAcquisition(peak::core::AcquisitionStartMode::Default);
+    
+    // start the device
+    nodeMapRemoteDevice->FindNode<peak::core::nodes::CommandNode>("AcquisitionStart")->Execute();
+    
+    // the acquisition loop
+    bool is_running = true;
+    while (is_running)
     {
         camera->setup("CameraLeft (40022599)");
 
