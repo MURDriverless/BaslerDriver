@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
         // Start the grabbing of c_countOfImagesToGrab images.
         // The camera device is parameterized with a default configuration which
         // sets up free-running continuous acquisition.
-        camera.StartGrabbing(GrabStrategy_LatestImageOnly);
+        camera.StartGrabbing(50, GrabStrategy_LatestImageOnly);
 
         // This smart pointer will receive the grab result data.
         CGrabResultPtr ptrGrabResult;
@@ -272,10 +272,7 @@ int main(int argc, char** argv) {
         exitCode = 1;
     }
 
-    // // Comment the following two lines to disable waiting on exit.
-    // cerr << endl << "Press enter to exit." << endl;
-    // while( cin.get() != '\n');
-
+    keypointDetector_.release();
     Pylon::PylonTerminate();
 
     return exitCode;
