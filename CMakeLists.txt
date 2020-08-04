@@ -56,12 +56,21 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/tkDNN/include ${CUDA_INCLUDE
 add_library(tkDNN SHARED ${tkdnn_SRC})
 target_link_libraries(tkDNN ${tkdnn_LIBS})
 
+#-------------------------------------------------------------------------------
+# Local Sources
+#-------------------------------------------------------------------------------
+file(GLOB LOCAL_SRC "src/*.cpp")
+
 find_package( OpenCV 4.0.0 REQUIRED )
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
 
 include_directories(
+    includes
     ${OpenCV_INCLUDE_DIRS}
     ${Pylon_INCLUDE_DIRS} )
+
+add_library(keypoint src/KeypointDetector.cpp src/Utils.cpp src/EntropyCalibrator.cpp)
+target_link_libraries(keypoint ${OPENCV_LIBRARIES} nvonnxparser)
 
 add_executable( main src/main.cpp )
 
@@ -70,6 +79,7 @@ find_package(Threads REQUIRED)
 
 target_link_libraries( main 
     tkDNN 
+    keypoint
     ${OPENCV_LIBRARIES}
     ${OpenCV_LIBS} 
     ${Pylon_LIBRARIES} 

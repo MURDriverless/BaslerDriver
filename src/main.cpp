@@ -19,6 +19,10 @@
 
 #include "Yolo3Detection.h"
 
+// include for keypoint detector
+#include "KeypointDetector.hpp"
+#include <algorithm>
+
 // Namespace for using pylon objects.
 using namespace Pylon;
 
@@ -31,6 +35,7 @@ const enum cv::InterpolationFlags interpMode = cv::INTER_CUBIC;
 
 tk::dnn::Yolo3Detection yolo;
 tk::dnn::DetectionNN *detNN;
+std::unique_ptr<KeypointDetector> keypointDetector_;
 std::vector<tk::dnn::box> bbox;
 
 static const int n_classes = 3;
@@ -74,8 +79,23 @@ int main(int argc, char** argv) {
     std::cout << "Loaded calibration file" << std::endl;
 
     // tkdnn setup
+    int keypointsW = 80;
+    int keypointsH = 80;
+    int maxBatch = 100;
+    
+    keypointDetector_.reset(
+        new KeypointDetector(
+            "../models/keypoints.onnx", 
+            "../models/keypoints.trt", 
+            keypointsW, 
+            keypointsH, 
+            maxBatch)
+    );
+
+    std::string net = "../models/yolo4_cones_int8.rt";
+
     detNN = &yolo;
-    assert(detNN->init("../models/yolo4_cones_int8.rt", n_classes, n_batch));
+    detNN->init(net, n_classes, n_batch);
 
     try
     {
@@ -188,7 +208,46 @@ int main(int argc, char** argv) {
 
                 // network inference
                 detNN->update(batch_dnn_input, n_batch);
+
+            // Start feature
+                std::vector<tk::dnn::box> bboxs = detNN->batchDetected[0];
+
+                // generate a vector of image crops for keypoint detector
+                std::vector<cv::Mat> rois;
+
+                for (const auto &bbox: bboxs)
+                {
+                    int left    = std::max(double(bbox.x), 0.0);
+                    int right   = std::min(double(bbox.x + bbox.w), (double) width);
+                    int top     = std::max(double(bbox.y), 0.0);
+                    int bot     = std::min(double(bbox.y + bbox.h), (double) height);
+
+                    cv::Rect box(cv::Point(left, top), cv::Point(right, bot));
+                    cv::Mat roi = unDist(box);
+                    rois.push_back(roi);
+                }
+
+                // keypoint network inference
+                std::vector<std::vector<cv::Point2f>> keypoints = keypointDetector_->doInference(rois);
+            // End feature detect
+
                 detNN->draw(batch_frame);
+
+
+
+                for (int i = 0; i < bboxs.size(); i++) {
+                    int top  = bboxs[i].y;
+                    int left = bboxs[i].x;
+
+                    for (const auto &keypoint : keypoints[i]) {
+                        float y = top + keypoint.y;
+                        float x = left + keypoint.x;
+
+                        cv::circle(batch_frame[0], cv::Point2f(x, y), 3, cv::Scalar(0, 255, 0), -1, 8);
+                    }
+                }
+
+                // drawKeypoints(batch_frame[0], boxes);
 
                 cout << " " << setw(5) << detNN->batchDetected[0].size() << " objects detected.";
 
