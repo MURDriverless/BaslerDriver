@@ -15,8 +15,6 @@
 
 #include <chrono>
 
-#include "GeniPylon.hpp"
-#include "GeniIDS.hpp"
 #include "GeniWrap.hpp"
 
 #include "Detectors.hpp"
@@ -61,7 +59,7 @@ int main(int argc, char** argv) {
     detectors.initialize("../models/yolo4_cones_int8.rt", "../models/keypoints.onnx");
 
     std::unique_ptr<IGeniCam> camera;
-    camera.reset(new IDSCam());
+    camera.reset(IGeniCam::create(GeniImpl::IDS_i));
     camera->initializeLibrary();
 
     try
@@ -101,11 +99,13 @@ int main(int argc, char** argv) {
         auto now = std::chrono::high_resolution_clock::now();
 
         cv::namedWindow("Camera_Undist", 0);
+
+        unsigned int grabCount = 100;
         unsigned int imageID = 0;
 
-        camera->startGrabbing();
+        camera->startGrabbing(grabCount);
 
-        while ( camera->isGrabbing())
+        while ((imageID < grabCount) && camera->isGrabbing())
         {
             // Wait for an image and then retrieve it. A timeout of 5000 ms is used.
             int height;
@@ -142,6 +142,8 @@ int main(int argc, char** argv) {
                 std::cout << "\tFrame Time (us): "  << std::setw(10) << deltaT;
 
                 detectors.detectFrame(src);
+
+                camera->clearResult();
             }
             else
             {
@@ -160,5 +162,5 @@ int main(int argc, char** argv) {
     camera->finalizeLibrary();
     delete camera.release();
 
-    return exitCode;
+    return 0;
 }
