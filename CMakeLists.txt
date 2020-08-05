@@ -76,6 +76,11 @@ include_directories(
 add_library(keypoint src/KeypointDetector.cpp src/Utils.cpp src/EntropyCalibrator.cpp)
 target_link_libraries(keypoint ${OPENCV_LIBRARIES} nvonnxparser)
 
+add_library(iGeniCam src/GeniWrap.cpp)
+target_link_libraries(iGeniCam
+${Pylon_LIBRARIES} 
+ids_peak)
+
 add_executable(main 
     src/main.cpp
     ${LOCAL_SRC}
@@ -87,6 +92,5 @@ target_link_libraries( main
     keypoint
     ${OPENCV_LIBRARIES}
     ${OpenCV_LIBS} 
-    ${Pylon_LIBRARIES} 
-    ids_peak
+    iGeniCam
     Threads::Threads)
