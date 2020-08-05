@@ -69,7 +69,7 @@ class IDSCam: public IGeniCam {
         }
 
         bool isGrabbing() {
-            return true;
+            return dataStream->IsGrabbing();
         }
 
         bool retreiveResult(int &height, int &width, uint8_t* &buffer) {
