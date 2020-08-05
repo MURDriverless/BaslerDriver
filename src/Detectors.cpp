@@ -30,7 +30,7 @@ void Detectors::initialize(std::string objectModel, std::string featureModel) {
     detNN->init(objectModel, n_classes, n_batch);
 }
 
-void Detectors::detectFrame(const cv::cuda::GpuMat imageFrameGpu) {
+void Detectors::detectFrame(const cv::cuda::GpuMat &imageFrameGpu) {
     cv::Mat imageFrame;
     imageFrameGpu.download(imageFrame);
 
