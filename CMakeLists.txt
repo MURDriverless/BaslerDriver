@@ -64,11 +64,15 @@ file(GLOB LOCAL_INC "includes/*.hpp")
 
 find_package( OpenCV 4.0.0 REQUIRED )
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindIDSPeak.cmake")
 
 include_directories(
     includes
     ${OpenCV_INCLUDE_DIRS}
-    ${Pylon_INCLUDE_DIRS} )
+    ${Pylon_INCLUDE_DIRS}
+    ${IDS_INCLUDE_DIR}
+    ${IDS_LIBRARIES}
+    )
 
 add_library(keypoint src/KeypointDetector.cpp src/Utils.cpp src/EntropyCalibrator.cpp)
 target_link_libraries(keypoint ${OPENCV_LIBRARIES} nvonnxparser)
@@ -85,4 +89,5 @@ target_link_libraries( main
     ${OPENCV_LIBRARIES}
     ${OpenCV_LIBS} 
     ${Pylon_LIBRARIES} 
-    )
+    ids_peak
+    Threads::Threads)
