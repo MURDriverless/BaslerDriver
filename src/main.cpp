@@ -1,5 +1,3 @@
-#include <pylon/PylonIncludes.h>
-#include <GenApi/GenApi.h>
 #include <iostream>
 #include <pthread.h>
 #include <unistd.h>
@@ -17,12 +15,11 @@
 
 #include <chrono>
 
+#include "GeniPylon.hpp"
+#include "GeniIDS.hpp"
+#include "GeniWrap.hpp"
+
 #include "Detectors.hpp"
-
-// Namespace for using pylon objects.
-using namespace Pylon;
-
-CInstantCamera camera;
 
 const enum cv::InterpolationFlags interpMode = cv::INTER_CUBIC;
 
@@ -37,9 +34,6 @@ int main(int argc, char** argv) {
     }
 
     cv::setNumThreads(numCores);
-
-    // Camera Setup
-    Pylon::PylonInitialize();
 
     cv::FileStorage fs;
     fs.open("../calibration.xml", cv::FileStorage::READ);
@@ -66,26 +60,13 @@ int main(int argc, char** argv) {
     Detectors detectors;
     detectors.initialize("../models/yolo4_cones_int8.rt", "../models/keypoints.onnx");
 
+    std::unique_ptr<IGeniCam> camera;
+    camera.reset(new IDSCam());
+    camera->initializeLibrary();
+
     try
     {
-
-        CTlFactory& TlFactory = CTlFactory::GetInstance();
-        CDeviceInfo di;
-        di.SetFriendlyName("CameraLeft (40022599)");
-        camera.Attach(TlFactory.CreateDevice(di));
-
-        // Print the model name of the camera.
-        std::cout << "Using device " << camera.GetDeviceInfo().GetModelName() << std::endl;
-
-        // The parameter MaxNumBuffer can be used to control the count of buffers
-        // allocated for grabbing. The default value of this parameter is 10.
-        // camera.MaxNumBuffer = 1;
-
-        camera.Open();
-        GenApi::INodeMap& nodemap = camera.GetNodeMap();
-        CEnumParameter(nodemap, "PixelFormat").SetValue("BayerBG8");
-        CBooleanParameter(nodemap, "AcquisitionFrameRateEnable").SetValue(false);
-        camera.Close();
+        camera->setup("CameraLeft (40022599)");
 
         switch (interpMode) {
             case (cv::INTER_NEAREST):
@@ -117,41 +98,33 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        // Start the grabbing of c_countOfImagesToGrab images.
-        // The camera device is parameterized with a default configuration which
-        // sets up free-running continuous acquisition.
-        camera.StartGrabbing(GrabStrategy_LatestImageOnly);
-
-        // This smart pointer will receive the grab result data.
-        CGrabResultPtr ptrGrabResult;
-
-        // Camera.StopGrabbing() is called automatically by the RetrieveResult() method
-        // when c_countOfImagesToGrab images have been retrieved.
-
         auto now = std::chrono::high_resolution_clock::now();
 
         cv::namedWindow("Camera_Undist", 0);
+        unsigned int imageID = 0;
 
-        while ( camera.IsGrabbing())
+        camera->startGrabbing();
+
+        while ( camera->isGrabbing())
         {
             // Wait for an image and then retrieve it. A timeout of 5000 ms is used.
-            camera.RetrieveResult( 5000, ptrGrabResult, TimeoutHandling_ThrowException);
+            int height;
+            int width;
+            uint8_t* buffer;
+            bool ret = camera->retreiveResult(height, width, buffer);
 
             // Image grabbed successfully?
-            if (ptrGrabResult->GrabSucceeded())
+            if (ret)
             {
                 // Access the image data.
                 auto then = now;
                 now = std::chrono::high_resolution_clock::now();
                 auto deltaT = std::chrono::duration_cast<std::chrono::microseconds>(now - then).count();
 
-                std::cout << "Image ID: " << ptrGrabResult->GetImageNumber();
+                std::cout << "Image ID: " << imageID++;
                 std::cout << "\tReal Frame Rate: " << std::setw(10) << 1e6/deltaT;
 
-                int height = (int) ptrGrabResult->GetHeight();
-                int width = (int) ptrGrabResult->GetWidth();
-
-                cv::Mat inMat = cv::Mat(height, width, CV_8UC1, static_cast<uint8_t *>(ptrGrabResult->GetBuffer()));
+                cv::Mat inMat = cv::Mat(height, width, CV_8UC1, buffer);
                 cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
                 cv::Mat Mat_RGB = cv::Mat(height, width, CV_8UC3);
 
@@ -172,20 +145,20 @@ int main(int argc, char** argv) {
             }
             else
             {
-                std::cout << "Error: " << ptrGrabResult->GetErrorCode() << " " << ptrGrabResult->GetErrorDescription() << std::endl;
+                std::cout << "Failed to grab image." << std::endl;
             }
         }
     }
-    catch (const GenericException &e)
+    catch (const std::exception &e)
     {
         // Error handling.
         std::cerr << "An exception occurred." << std::endl
-        << e.GetDescription() << std::endl;
+        << e.what() << std::endl;
         exitCode = 1;
     }
 
-    Pylon::PylonTerminate();
-
+    camera->finalizeLibrary();
+    delete camera.release();
 
     return exitCode;
 }
