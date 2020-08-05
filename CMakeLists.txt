@@ -12,7 +12,7 @@ project( main )
 # tkdnn
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src/tkDNN/cmake)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fPIC -Wno-deprecated-declarations -Wno-unused-variable")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fPIC -Wno-deprecated-declarations -Wno-unused-variable -pthread -DOPENCV_CUDACONTRIB")
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/tkDNN/include/tkDNN)
 
 add_definitions(-DTKDNN_PATH="${CMAKE_CURRENT_SOURCE_DIR}/src/tkDNN")
@@ -60,6 +60,7 @@ target_link_libraries(tkDNN ${tkdnn_LIBS})
 # Local Sources
 #-------------------------------------------------------------------------------
 file(GLOB LOCAL_SRC "src/*.cpp")
+file(GLOB LOCAL_INC "includes/*.hpp")
 
 find_package( OpenCV 4.0.0 REQUIRED )
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
@@ -72,10 +73,11 @@ include_directories(
 add_library(keypoint src/KeypointDetector.cpp src/Utils.cpp src/EntropyCalibrator.cpp)
 target_link_libraries(keypoint ${OPENCV_LIBRARIES} nvonnxparser)
 
-add_executable( main src/main.cpp )
-
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
+add_executable(main 
+    src/main.cpp
+    ${LOCAL_SRC}
+    ${LOCAL_INC}
+    )
 
 target_link_libraries( main 
     tkDNN 
@@ -83,4 +85,4 @@ target_link_libraries( main
     ${OPENCV_LIBRARIES}
     ${OpenCV_LIBS} 
     ${Pylon_LIBRARIES} 
-    Threads::Threads)
+    )

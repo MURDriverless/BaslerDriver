@@ -17,29 +17,14 @@
 
 #include <chrono>
 
-#include "Yolo3Detection.h"
-
-// include for keypoint detector
-#include "KeypointDetector.hpp"
-#include <algorithm>
+#include "Detectors.hpp"
 
 // Namespace for using pylon objects.
 using namespace Pylon;
 
-// Namespace for using cout.
-using namespace std;
-
 CInstantCamera camera;
 
 const enum cv::InterpolationFlags interpMode = cv::INTER_CUBIC;
-
-tk::dnn::Yolo3Detection yolo;
-tk::dnn::DetectionNN *detNN;
-std::unique_ptr<KeypointDetector> keypointDetector_;
-std::vector<tk::dnn::box> bbox;
-
-static const int n_classes = 3;
-static const int n_batch = 1;
 
 int main(int argc, char** argv) {
     int exitCode;
@@ -78,24 +63,8 @@ int main(int argc, char** argv) {
 
     std::cout << "Loaded calibration file" << std::endl;
 
-    // tkdnn setup
-    int keypointsW = 80;
-    int keypointsH = 80;
-    int maxBatch = 100;
-    
-    keypointDetector_.reset(
-        new KeypointDetector(
-            "../models/keypoints.onnx", 
-            "../models/keypoints.trt", 
-            keypointsW, 
-            keypointsH, 
-            maxBatch)
-    );
-
-    std::string net = "../models/yolo4_cones_int8.rt";
-
-    detNN = &yolo;
-    detNN->init(net, n_classes, n_batch);
+    Detectors detectors;
+    detectors.initialize("../models/yolo4_cones_int8.rt", "../models/keypoints.onnx");
 
     try
     {
@@ -106,7 +75,7 @@ int main(int argc, char** argv) {
         camera.Attach(TlFactory.CreateDevice(di));
 
         // Print the model name of the camera.
-        cout << "Using device " << camera.GetDeviceInfo().GetModelName() << endl;
+        std::cout << "Using device " << camera.GetDeviceInfo().GetModelName() << std::endl;
 
         // The parameter MaxNumBuffer can be used to control the count of buffers
         // allocated for grabbing. The default value of this parameter is 10.
@@ -120,30 +89,38 @@ int main(int argc, char** argv) {
 
         switch (interpMode) {
             case (cv::INTER_NEAREST):
-                cout << "Nearest Interp" << endl;
+                std::cout << "Nearest Interp" << std::endl;
                 break;
             case (cv::INTER_LINEAR):
-                cout << "Linear Interp" << endl;
+                std::cout << "Linear Interp" << std::endl;
                 break;
             case (cv::INTER_CUBIC):
-                cout << "Cubic Interp" << endl;
+                std::cout << "Cubic Interp" << std::endl;
                 break;
             default:
-                cout << "Invalid Interp" << endl;
+                std::cout << "Invalid Interp" << std::endl;
                 return 1;
         }
 
         if (USE_CUDA) {
-            cout << "Using CUDA" << endl;
+            std::cout << "Using CUDA" << std::endl;
+            std::cout << "OPENCV_CUDACONTRIB Flag: ";
+
+            #ifdef OPENCV_CUDACONTRIB
+            std::cout << "True" << std::endl;
+            #else
+            std::cout << "False" << std::endl;
+            #endif
         }
         else {
-            cout << "CPU with " << numCores << " threads" << endl;
+            std::cout << "Requires to be compiled with CUDA" << std::endl;
+            return 1;
         }
 
         // Start the grabbing of c_countOfImagesToGrab images.
         // The camera device is parameterized with a default configuration which
         // sets up free-running continuous acquisition.
-        camera.StartGrabbing(50, GrabStrategy_LatestImageOnly);
+        camera.StartGrabbing(GrabStrategy_LatestImageOnly);
 
         // This smart pointer will receive the grab result data.
         CGrabResultPtr ptrGrabResult;
@@ -151,7 +128,7 @@ int main(int argc, char** argv) {
         // Camera.StopGrabbing() is called automatically by the RetrieveResult() method
         // when c_countOfImagesToGrab images have been retrieved.
 
-        auto now = chrono::high_resolution_clock::now();
+        auto now = std::chrono::high_resolution_clock::now();
 
         cv::namedWindow("Camera_Undist", 0);
 
@@ -165,11 +142,11 @@ int main(int argc, char** argv) {
             {
                 // Access the image data.
                 auto then = now;
-                now = chrono::high_resolution_clock::now();
-                auto deltaT = chrono::duration_cast<chrono::microseconds>(now - then).count();
+                now = std::chrono::high_resolution_clock::now();
+                auto deltaT = std::chrono::duration_cast<std::chrono::microseconds>(now - then).count();
 
-                cout << "Image ID: " << ptrGrabResult->GetImageNumber();
-                cout << "\tReal Frame Rate: " << setw(10) << 1e6/deltaT;
+                std::cout << "Image ID: " << ptrGrabResult->GetImageNumber();
+                std::cout << "\tReal Frame Rate: " << std::setw(10) << 1e6/deltaT;
 
                 int height = (int) ptrGrabResult->GetHeight();
                 int width = (int) ptrGrabResult->GetWidth();
@@ -178,102 +155,37 @@ int main(int argc, char** argv) {
                 cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
                 cv::Mat Mat_RGB = cv::Mat(height, width, CV_8UC3);
 
-                if (USE_CUDA) {
-                    cv::cuda::GpuMat src, dst;
-                    src.upload(inMat);
-                    
-                    cv::cuda::cvtColor(src, dst, cv::COLOR_BayerRG2BGR);
-                    cv::cuda::remap(dst, src, map1_cuda, map2_cuda, interpMode);
+                cv::cuda::GpuMat src, dst;
+                src.upload(inMat);
+                
+                cv::cuda::cvtColor(src, dst, cv::COLOR_BayerRG2BGR);
+                cv::cuda::remap(dst, src, map1_cuda, map2_cuda, interpMode);
 
-                    src.download(unDist);
-                }
-                else {
-                    cv::cvtColor(inMat, Mat_RGB, cv::COLOR_BayerRG2BGR);
-                    cv::remap(Mat_RGB, unDist, map1, map2, interpMode);
-                }
+                // src.download(unDist);
 
-                auto now2 = chrono::high_resolution_clock::now();
-                deltaT = chrono::duration_cast<chrono::microseconds>(now2 - now).count();
+                auto now2 = std::chrono::high_resolution_clock::now();
+                deltaT = std::chrono::duration_cast<std::chrono::microseconds>(now2 - now).count();
 
-                cout << "\tFrame Time (us): "  << setw(10) << deltaT;
+                std::cout << "\tFrame Time (us): "  << std::setw(10) << deltaT;
 
-                std::vector<cv::Mat> batch_frame;
-                std::vector<cv::Mat> batch_dnn_input;
-
-                // batch frame will be used for image output
-                batch_frame.push_back(unDist);
-
-                // dnn input will be resized to network format
-                batch_dnn_input.push_back(unDist.clone());
-
-                // network inference
-                detNN->update(batch_dnn_input, n_batch);
-
-            // Start feature
-                std::vector<tk::dnn::box> bboxs = detNN->batchDetected[0];
-
-                // generate a vector of image crops for keypoint detector
-                std::vector<cv::Mat> rois;
-
-                for (const auto &bbox: bboxs)
-                {
-                    int left    = std::max(double(bbox.x), 0.0);
-                    int right   = std::min(double(bbox.x + bbox.w), (double) width);
-                    int top     = std::max(double(bbox.y), 0.0);
-                    int bot     = std::min(double(bbox.y + bbox.h), (double) height);
-
-                    cv::Rect box(cv::Point(left, top), cv::Point(right, bot));
-                    cv::Mat roi = unDist(box);
-                    rois.push_back(roi);
-                }
-
-                // keypoint network inference
-                std::vector<std::vector<cv::Point2f>> keypoints = keypointDetector_->doInference(rois);
-            // End feature detect
-
-                detNN->draw(batch_frame);
-
-
-
-                for (int i = 0; i < bboxs.size(); i++) {
-                    int top  = bboxs[i].y;
-                    int left = bboxs[i].x;
-
-                    for (const auto &keypoint : keypoints[i]) {
-                        float y = top + keypoint.y;
-                        float x = left + keypoint.x;
-
-                        cv::circle(batch_frame[0], cv::Point2f(x, y), 3, cv::Scalar(0, 255, 0), -1, 8);
-                    }
-                }
-
-                // drawKeypoints(batch_frame[0], boxes);
-
-                cout << " " << setw(5) << detNN->batchDetected[0].size() << " objects detected.";
-
-                cv::imshow("Camera_Undist", batch_frame[0]);
-                cv::resizeWindow("Camera_Undist", 1200, 600);
-
-                cv::waitKey(1);
-
-                cout << endl;
+                detectors.detectFrame(src);
             }
             else
             {
-                cout << "Error: " << ptrGrabResult->GetErrorCode() << " " << ptrGrabResult->GetErrorDescription() << endl;
+                std::cout << "Error: " << ptrGrabResult->GetErrorCode() << " " << ptrGrabResult->GetErrorDescription() << std::endl;
             }
         }
     }
     catch (const GenericException &e)
     {
         // Error handling.
-        cerr << "An exception occurred." << endl
-        << e.GetDescription() << endl;
+        std::cerr << "An exception occurred." << std::endl
+        << e.GetDescription() << std::endl;
         exitCode = 1;
     }
 
-    keypointDetector_.release();
     Pylon::PylonTerminate();
+
 
     return exitCode;
 }
