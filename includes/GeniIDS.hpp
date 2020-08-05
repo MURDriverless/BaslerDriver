@@ -48,7 +48,7 @@ class IDSCam: public IGeniCam {
             // get payload size
             payloadSize = nodeMapRemoteDevice->FindNode<peak::core::nodes::IntegerNode>("PayloadSize")->Value();
 
-            nodeMapRemoteDevice->FindNode<peak::core::nodes::EnumerationNode>("PixelFormat")->SetCurrentEntry("BayerBG8");
+            // nodeMapRemoteDevice->FindNode<peak::core::nodes::EnumerationNode>("PixelFormat")->SetCurrentEntry("BayerBG8");
         }
 
         void startGrabbing(uint32_t numImages = UINT32_MAX) {

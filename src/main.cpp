@@ -62,6 +62,9 @@ int main(int argc, char** argv) {
     camera.reset(IGeniCam::create(GeniImpl::IDS_i));
     camera->initializeLibrary();
 
+    cv::cuda::Stream cam1Stream;
+    cv::cuda::Stream cam2Stream;
+
     try
     {
         camera->setup("CameraLeft (40022599)");
@@ -99,8 +102,9 @@ int main(int argc, char** argv) {
         auto now = std::chrono::high_resolution_clock::now();
 
         cv::namedWindow("Camera_Undist", 0);
+        cv::namedWindow("Camera_Undist2", 0);
 
-        unsigned int grabCount = 100;
+        unsigned int grabCount = INT32_MAX;
         unsigned int imageID = 0;
 
         camera->startGrabbing(grabCount);
@@ -124,24 +128,41 @@ int main(int argc, char** argv) {
                 std::cout << "Image ID: " << imageID++;
                 std::cout << "\tReal Frame Rate: " << std::setw(10) << 1e6/deltaT;
 
-                cv::Mat inMat = cv::Mat(height, width, CV_8UC1, buffer);
-                cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
-                cv::Mat Mat_RGB = cv::Mat(height, width, CV_8UC3);
+                cv::Mat inMat_t = cv::Mat(height, width, CV_8UC1, buffer);
+                // cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
 
-                cv::cuda::GpuMat src, dst;
-                src.upload(inMat);
-                
-                cv::cuda::cvtColor(src, dst, cv::COLOR_BayerRG2BGR);
-                cv::cuda::remap(dst, src, map1_cuda, map2_cuda, interpMode);
+                cv::cuda::HostMem inMat(inMat_t);
+                cv::cuda::HostMem unDist1(height, width, CV_8UC1);
+                cv::cuda::HostMem unDist2(height, width, CV_8UC1);
 
-                // src.download(unDist);
+                cv::cuda::GpuMat src1, dst1;
+                cv::cuda::GpuMat src2, dst2;
+
+                src1.upload(inMat, cam1Stream);
+                src2.upload(inMat, cam2Stream);
+
+                cv::cuda::cvtColor(src1, dst1, cv::COLOR_BayerRG2BGR, 0, cam1Stream);
+                cv::cuda::remap(dst1, src1, map1_cuda, map2_cuda, interpMode, 0, cv::Scalar(), cam1Stream);
+
+                cam1Stream.waitForCompletion();
+
+                cv::cuda::cvtColor(src2, dst2, cv::COLOR_BayerRG2BGR, 0, cam2Stream);
+                cv::cuda::remap(dst2, src2, map1_cuda, map2_cuda, interpMode, 0, cv::Scalar(), cam2Stream);
 
                 auto now2 = std::chrono::high_resolution_clock::now();
                 deltaT = std::chrono::duration_cast<std::chrono::microseconds>(now2 - now).count();
 
-                std::cout << "\tFrame Time (us): "  << std::setw(10) << deltaT;
+                std::cout << "\tFrame Time (us): "  << std::setw(10) << deltaT << " ";
 
-                detectors.detectFrame(src);
+                detectors.detectFrame(src1);
+
+                src2.download(unDist2, cam2Stream);
+                cam2Stream.waitForCompletion();
+
+                cv::imshow("Camera_Undist2", unDist2);
+                cv::resizeWindow("Camera_Undist2", 1200, 600);
+
+                cv::waitKey(1);
 
                 camera->clearResult();
             }
