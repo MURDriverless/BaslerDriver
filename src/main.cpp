@@ -1,5 +1,6 @@
+#include <pylon/PylonIncludes.h>
+#include <GenApi/GenApi.h>
 #include <iostream>
-#include <iomanip>
 #include <pthread.h>
 #include <unistd.h>
 
@@ -67,7 +68,6 @@ int main(int argc, char** argv) {
 
     try
     {
-        camera->setup("CameraLeft (40022599)");
 
         CTlFactory& TlFactory = CTlFactory::GetInstance();
         CDeviceInfo di;
@@ -132,17 +132,13 @@ int main(int argc, char** argv) {
 
         cv::namedWindow("Camera_Undist", 0);
 
-        int imageCount = 0;
-
-        while (imageCount < 50 &&  camera->isGrabbing())
+        while ( camera.IsGrabbing())
         {
-            int height, width;
-            uint8_t* buffer;
-
-            bool ret = camera->retreiveResult(height, width, buffer);
+            // Wait for an image and then retrieve it. A timeout of 5000 ms is used.
+            camera.RetrieveResult( 5000, ptrGrabResult, TimeoutHandling_ThrowException);
 
             // Image grabbed successfully?
-            if (ret)
+            if (ptrGrabResult->GrabSucceeded())
             {
                 // Access the image data.
                 auto then = now;
@@ -152,9 +148,8 @@ int main(int argc, char** argv) {
                 std::cout << "Image ID: " << ptrGrabResult->GetImageNumber();
                 std::cout << "\tReal Frame Rate: " << std::setw(10) << 1e6/deltaT;
 
-                cv::Mat inMat = cv::Mat(height, width, CV_8UC1, buffer);
-                cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
-                cv::Mat Mat_RGB = cv::Mat(height, width, CV_8UC3);
+                int height = (int) ptrGrabResult->GetHeight();
+                int width = (int) ptrGrabResult->GetWidth();
 
                 cv::Mat inMat = cv::Mat(height, width, CV_8UC1, static_cast<uint8_t *>(ptrGrabResult->GetBuffer()));
                 cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
@@ -181,7 +176,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    catch (const exception &e)
+    catch (const GenericException &e)
     {
         // Error handling.
         std::cerr << "An exception occurred." << std::endl
