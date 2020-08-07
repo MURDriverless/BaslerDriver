@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
                     cv::Mat tvec;
                     cv::Mat rvec;
 
-                    bool ret = cv::solvePnPRansac(conePoints, coneROI.keypoints, cameraMatrix, distCoeffs, rvec, tvec, false, 1000, 4.0f);
+                    bool ret = cv::solvePnP(conePoints, coneROI.keypoints, cameraMatrix, distCoeffs, rvec, tvec, false, cv::SolvePnPMethod::SOLVEPNP_IPPE);
                     if (true) {
                         std::stringstream outputString;
                         outputString << std::setfill('0') << std::setw(8) 
