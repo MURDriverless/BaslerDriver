@@ -42,7 +42,15 @@ class PylonCam: public IGeniCam {
             GenApi::INodeMap& nodemap = camera.GetNodeMap();
             Pylon::CEnumParameter(nodemap, "PixelFormat").SetValue("BayerBG8");
             Pylon::CBooleanParameter(nodemap, "AcquisitionFrameRateEnable").SetValue(false);
-            // camera.LightSourcePreset.SetValue(Basler_UniversalCameraParams::LightSourcePresetEnums::LightSourcePreset_Tungsten2800K);
+            camera.LightSourcePreset.SetValue(Basler_UniversalCameraParams::LightSourcePresetEnums::LightSourcePreset_Daylight6500K);
+
+            // Select auto function ROI 2
+            Pylon::CEnumParameter(nodemap, "AutoFunctionROISelector").SetValue("ROI2");
+            // Enable the Balance White Auto auto function
+            // for the auto function ROI selected
+            Pylon::CBooleanParameter(nodemap, "AutoFunctionROIUseWhiteBalance").SetValue(true);
+            // Enable Balance White Auto by setting the operating mode to Continuous
+            Pylon::CEnumParameter(nodemap, "BalanceWhiteAuto").SetValue("Continuous");
             camera.Close();
         }
 
