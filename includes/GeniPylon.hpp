@@ -2,11 +2,14 @@
 #include "GeniWrap.hpp"
 
 #include <pylon/PylonIncludes.h>
+#include <pylon/BaslerUniversalInstantCamera.h>
+#include <pylon/ParameterIncludes.h>
+#include <pylon/EnumParameterT.h>
 #include <GenApi/GenApi.h>
 
 class PylonCam: public IGeniCam {
     private:
-        Pylon::CInstantCamera camera;
+        Pylon::CBaslerUniversalInstantCamera camera;
         Pylon::CGrabResultPtr ptrGrabResult;
 
     public:
@@ -39,6 +42,7 @@ class PylonCam: public IGeniCam {
             GenApi::INodeMap& nodemap = camera.GetNodeMap();
             Pylon::CEnumParameter(nodemap, "PixelFormat").SetValue("BayerBG8");
             Pylon::CBooleanParameter(nodemap, "AcquisitionFrameRateEnable").SetValue(false);
+            // camera.LightSourcePreset.SetValue(Basler_UniversalCameraParams::LightSourcePresetEnums::LightSourcePreset_Tungsten2800K);
             camera.Close();
         }
 

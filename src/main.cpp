@@ -6,6 +6,7 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/utility.hpp>
 #include <opencv2/highgui.hpp>
+
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
@@ -19,7 +20,7 @@
 
 #include "Detectors.hpp"
 
-const enum cv::InterpolationFlags interpMode = cv::INTER_CUBIC;
+const enum cv::InterpolationFlags interpMode = cv::INTER_LINEAR;
 
 int main(int argc, char** argv) {
     int exitCode;
@@ -44,6 +45,17 @@ int main(int argc, char** argv) {
 
     fs.release();
 
+    std::vector<cv::Point3f> conePoints; // Real world mm
+    conePoints.push_back(cv::Point3f(0, 0, 0));
+
+    for (int i = 1; i <= 3; i++) {
+        float x = -77.5/3.0f * i;
+        float y = 300.0f/3.0f * i;
+
+        conePoints.push_back(cv::Point3f( x, y, 0));
+        conePoints.push_back(cv::Point3f(-x, y, 0));
+    }
+
     // OpenCV Setup
     cv::Mat newCameraMatrix = cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, cv::Size(1920, 1200), 0);
     cv::Mat map1, map2;
@@ -59,11 +71,15 @@ int main(int argc, char** argv) {
     detectors.initialize("../models/yolo4_cones_int8.rt", "../models/keypoints.onnx");
 
     std::unique_ptr<IGeniCam> camera;
-    camera.reset(IGeniCam::create(GeniImpl::IDS_i));
+    camera.reset(IGeniCam::create(GeniImpl::Pylon_i));
     camera->initializeLibrary();
+
+    cv::cuda::setBufferPoolUsage(true);
+    cv::cuda::setBufferPoolConfig(cv::cuda::getDevice(), 1920 * 1200 * 8, 2);
 
     cv::cuda::Stream cam1Stream;
     cv::cuda::Stream cam2Stream;
+    cv::cuda::BufferPool pool1(cam1Stream), pool2(cam2Stream);
 
     try
     {
@@ -104,7 +120,7 @@ int main(int argc, char** argv) {
         cv::namedWindow("Camera_Undist", 0);
         cv::namedWindow("Camera_Undist2", 0);
 
-        unsigned int grabCount = INT32_MAX;
+        unsigned int grabCount = 6000;
         unsigned int imageID = 0;
 
         camera->startGrabbing(grabCount);
@@ -131,33 +147,63 @@ int main(int argc, char** argv) {
                 cv::Mat inMat_t = cv::Mat(height, width, CV_8UC1, buffer);
                 // cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
 
-                cv::cuda::HostMem inMat(inMat_t);
+                cv::cuda::HostMem inMat(height, width, CV_8UC1, cv::cuda::HostMem::PAGE_LOCKED);
+                inMat_t.copyTo(inMat);
+
                 cv::cuda::HostMem unDist1(height, width, CV_8UC1);
                 cv::cuda::HostMem unDist2(height, width, CV_8UC1);
 
-                cv::cuda::GpuMat src1, dst1;
-                cv::cuda::GpuMat src2, dst2;
+                cv::cuda::GpuMat src1 = pool1.getBuffer(1920, 1200, CV_8UC1);
+                cv::cuda::GpuMat rgb1 = pool1.getBuffer(1920, 1200, CV_8UC3);
+                cv::cuda::GpuMat uDist1 = pool1.getBuffer(1920, 1200, CV_8UC3);
+
+                cv::cuda::GpuMat src2 = pool1.getBuffer(1920, 1200, CV_8UC1);
+                cv::cuda::GpuMat rgb2 = pool1.getBuffer(1920, 1200, CV_8UC3);
+                cv::cuda::GpuMat uDist2 = pool1.getBuffer(1920, 1200, CV_8UC3);
+
 
                 src1.upload(inMat, cam1Stream);
                 src2.upload(inMat, cam2Stream);
 
-                cv::cuda::cvtColor(src1, dst1, cv::COLOR_BayerRG2BGR, 0, cam1Stream);
-                cv::cuda::remap(dst1, src1, map1_cuda, map2_cuda, interpMode, 0, cv::Scalar(), cam1Stream);
+                cv::cuda::cvtColor(src1, rgb1, cv::COLOR_BayerRG2BGR, 0, cam1Stream);
+                cv::cuda::remap(rgb1, uDist1, map1_cuda, map2_cuda, interpMode, 0, cv::Scalar(), cam1Stream);
 
-                cam1Stream.waitForCompletion();
+                // cam1Stream.waitForCompletion();
 
-                cv::cuda::cvtColor(src2, dst2, cv::COLOR_BayerRG2BGR, 0, cam2Stream);
-                cv::cuda::remap(dst2, src2, map1_cuda, map2_cuda, interpMode, 0, cv::Scalar(), cam2Stream);
+                cv::cuda::cvtColor(src2, rgb2, cv::COLOR_BayerRG2BGR, 0, cam2Stream);
+                cv::cuda::remap(rgb2, uDist2, map1_cuda, map2_cuda, interpMode, 0, cv::Scalar(), cam2Stream);
 
                 auto now2 = std::chrono::high_resolution_clock::now();
                 deltaT = std::chrono::duration_cast<std::chrono::microseconds>(now2 - now).count();
 
                 std::cout << "\tFrame Time (us): "  << std::setw(10) << deltaT << " ";
 
-                detectors.detectFrame(src1);
+                std::vector<ConeROI> coneROIs;
+                detectors.detectFrame(uDist1, coneROIs);
 
-                src2.download(unDist2, cam2Stream);
+                uDist2.download(unDist2, cam2Stream);
                 cam2Stream.waitForCompletion();
+
+                for (int i = 0; i < coneROIs.size(); i++) {
+                    if (i > 1) {
+                        break;
+                    }
+
+                    ConeROI &coneROI = coneROIs[i];
+                    cv::Mat tvec;
+                    cv::Mat rvec;
+
+                    bool ret = cv::solvePnPRansac(conePoints, coneROI.keypoints, cameraMatrix, distCoeffs, rvec, tvec, false, 1000, 4.0f);
+                    if (true) {
+                        std::stringstream outputString;
+                        outputString << std::setfill('0') << std::setw(8) 
+                        << std::fixed << std::setprecision(2) <<
+                        tvec.at<double>(2,0) << std::endl;
+                        cv::putText(unDist2, outputString.str(), cv::Point(1000, 600), cv::HersheyFonts::FONT_HERSHEY_PLAIN, 5, CV_RGB(118, 185, 0), 2);
+
+                        std::cout << "Est Depth: " << tvec.at<double>(2, 0) << std::endl;
+                    }
+                }
 
                 cv::imshow("Camera_Undist2", unDist2);
                 cv::resizeWindow("Camera_Undist2", 1200, 600);

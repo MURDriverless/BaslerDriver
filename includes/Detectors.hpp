@@ -1,8 +1,15 @@
 #pragma once
 #include <iostream>
-#include "opencv2/core/cuda.hpp"
+#include <opencv2/core.hpp>
+#include <opencv2/core/cuda.hpp>
 #include "Yolo3Detection.h"
 #include "KeypointDetector.hpp"
+
+struct ConeROI {
+    cv::Rect roiRect;
+    float x, y, w, h;
+    std::vector<cv::Point2f> keypoints;
+};
 
 class Detectors {
     private:
@@ -22,5 +29,5 @@ class Detectors {
         Detectors();
         ~Detectors();
         void initialize(std::string objectModel, std::string featureModel);
-        void detectFrame(const cv::cuda::GpuMat &imageFrameGpu);
+        void detectFrame(const cv::cuda::GpuMat &imageFrameGpu, std::vector<ConeROI> &coneROIs);
 };

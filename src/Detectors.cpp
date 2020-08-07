@@ -30,8 +30,8 @@ void Detectors::initialize(std::string objectModel, std::string featureModel) {
     detNN->init(objectModel, n_classes, n_batch);
 }
 
-void Detectors::detectFrame(const cv::cuda::GpuMat &imageFrameGpu) {
-    cv::Mat imageFrame;
+void Detectors::detectFrame(const cv::cuda::GpuMat &imageFrameGpu, std::vector<ConeROI> &coneROIs) {
+    cv::Mat imageFrame(1920, 1200, CV_8UC3);
     imageFrameGpu.download(imageFrame);
 
     std::vector<cv::Mat> batch_frame;
@@ -53,14 +53,24 @@ void Detectors::detectFrame(const cv::cuda::GpuMat &imageFrameGpu) {
 
     for (const auto &bbox: bboxs)
     {
-        int left    = std::max(double(bbox.x), 0.0);
-        int right   = std::min(double(bbox.x + bbox.w), (double) imageFrame.cols);
-        int top     = std::max(double(bbox.y), 0.0);
-        int bot     = std::min(double(bbox.y + bbox.h), (double) imageFrame.rows);
+        ConeROI coneROI;
+
+        int left    = std::max<float>(float(bbox.x), 0.0f);
+        int right   = std::min<float>(float(bbox.x + bbox.w), (float) imageFrame.cols);
+        int top     = std::max<float>(float(bbox.y), 0.0f);
+        int bot     = std::min<float>(float(bbox.y + bbox.h), (float) imageFrame.rows);
 
         cv::Rect box(cv::Point(left, top), cv::Point(right, bot));
         cv::Mat roi = imageFrame(box);
         rois.push_back(roi);
+
+        coneROI.roiRect = box;
+        coneROI.x = bbox.x;
+        coneROI.y = bbox.y;
+        coneROI.w = bbox.w;
+        coneROI.h = bbox.h;
+
+        coneROIs.push_back(coneROI);
     }
 
     // keypoint network inference
@@ -73,6 +83,8 @@ void Detectors::detectFrame(const cv::cuda::GpuMat &imageFrameGpu) {
             keypoint.x += bboxs[i].x;
 
             cv::circle(batch_frame[0], keypoint, 3, cv::Scalar(0, 255, 0), -1, 8);
+
+            coneROIs[i].keypoints.push_back(keypoint);
         }
     }
 
