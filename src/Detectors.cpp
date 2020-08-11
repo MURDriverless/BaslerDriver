@@ -78,11 +78,13 @@ void Detectors::detectFrame(const cv::cuda::GpuMat &imageFrameGpu, std::vector<C
 
     detNN->draw(batch_frame);
     for (int i = 0; i < bboxs.size(); i++) {
-        for (auto &keypoint : keypoints[i]) {
+        for (int j = 0; j < keypoints[i].size(); j++) {
+            cv::Point2f &keypoint = keypoints[i][j];
             keypoint.y += bboxs[i].y;
             keypoint.x += bboxs[i].x;
 
             cv::circle(batch_frame[0], keypoint, 3, cv::Scalar(0, 255, 0), -1, 8);
+            std::cout << keypoint << std::endl;
 
             coneROIs[i].keypoints.push_back(keypoint);
         }
