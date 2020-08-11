@@ -28,7 +28,7 @@ class PylonCam: public IGeniCam {
         void setup(const std::string cameraName) {
             Pylon::CTlFactory& TlFactory = Pylon::CTlFactory::GetInstance();
             Pylon::CDeviceInfo di;
-            di.SetFriendlyName("CameraLeft (40022599)");
+            di.SetFriendlyName(cameraName.c_str());
             camera.Attach(TlFactory.CreateDevice(di));
 
             // Print the model name of the camera.
@@ -40,9 +40,9 @@ class PylonCam: public IGeniCam {
 
             camera.Open();
             GenApi::INodeMap& nodemap = camera.GetNodeMap();
-            Pylon::CEnumParameter(nodemap, "PixelFormat").SetValue("BayerBG8");
+            // Pylon::CEnumParameter(nodemap, "PixelFormat").Se'tValue("BayerBG8");
             Pylon::CBooleanParameter(nodemap, "AcquisitionFrameRateEnable").SetValue(false);
-            camera.LightSourcePreset.SetValue(Basler_UniversalCameraParams::LightSourcePresetEnums::LightSourcePreset_Daylight6500K);
+            // camera.LightSourcePreset.SetValue(Basler_UniversalCameraParams::LightSourcePresetEnums::LightSourcePreset_Daylight6500K);
 
             // Select auto function ROI 2
             Pylon::CEnumParameter(nodemap, "AutoFunctionROISelector").SetValue("ROI2");

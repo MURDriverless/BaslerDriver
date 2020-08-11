@@ -70,9 +70,13 @@ int main(int argc, char** argv) {
     Detectors detectors;
     detectors.initialize("../models/yolo4_cones_int8.rt", "../models/keypoints.onnx");
 
-    std::unique_ptr<IGeniCam> camera;
-    camera.reset(IGeniCam::create(GeniImpl::Pylon_i));
-    camera->initializeLibrary();
+    std::unique_ptr<IGeniCam> camera1;
+    std::unique_ptr<IGeniCam> camera2;
+
+    camera1.reset(IGeniCam::create(GeniImpl::Pylon_i));
+    camera2.reset(IGeniCam::create(GeniImpl::Pylon_i));
+    
+    camera1->initializeLibrary();
 
     cv::cuda::setBufferPoolUsage(true);
     cv::cuda::setBufferPoolConfig(cv::cuda::getDevice(), 1920 * 1200 * 8, 2);
@@ -83,7 +87,9 @@ int main(int argc, char** argv) {
 
     try
     {
-        camera->setup("CameraLeft (40022599)");
+        camera2->setup("CameraRight (22954692)");
+        camera1->setup("CameraLeft (40022599)");
+        // camera1->setup("CameraLeft (40022599)");
 
         switch (interpMode) {
             case (cv::INTER_NEAREST):
@@ -123,18 +129,25 @@ int main(int argc, char** argv) {
         unsigned int grabCount = 6000;
         unsigned int imageID = 0;
 
-        camera->startGrabbing(grabCount);
+        camera1->startGrabbing(grabCount);
+        camera2->startGrabbing(grabCount);
 
-        while ((imageID < grabCount) && camera->isGrabbing())
+        while ((imageID < grabCount) && camera1->isGrabbing() && camera2->isGrabbing())
         {
             // Wait for an image and then retrieve it. A timeout of 5000 ms is used.
             int height;
             int width;
-            uint8_t* buffer;
-            bool ret = camera->retreiveResult(height, width, buffer);
+            uint8_t* buffer1;
+            uint8_t* buffer2;
+
+            bool ret1 = camera1->retreiveResult(height, width, buffer1);
+            bool ret2 = camera2->retreiveResult(height, width, buffer2);
+
+            height = 1920;
+            width = 1200;
 
             // Image grabbed successfully?
-            if (ret)
+            if (ret1 && ret2)
             {
                 // Access the image data.
                 auto then = now;
@@ -144,11 +157,15 @@ int main(int argc, char** argv) {
                 std::cout << "Image ID: " << imageID++;
                 std::cout << "\tReal Frame Rate: " << std::setw(10) << 1e6/deltaT;
 
-                cv::Mat inMat_t = cv::Mat(height, width, CV_8UC1, buffer);
+                cv::Mat inMat_t = cv::Mat(height, width, CV_8UC1, buffer1);
+                cv::Mat inMat2_t = cv::Mat(height, width, CV_8UC1, buffer2);
                 // cv::Mat unDist = cv::Mat(height, width, CV_8UC1);
 
                 cv::cuda::HostMem inMat(height, width, CV_8UC1, cv::cuda::HostMem::PAGE_LOCKED);
-                inMat_t.copyTo(inMat);
+                cv::cuda::HostMem inMat2(height, width, CV_8UC1, cv::cuda::HostMem::PAGE_LOCKED);
+                cv::resize(inMat_t, inMat, cv::Size(1920, 1200));
+                cv::resize(inMat2_t, inMat2, cv::Size(1920, 1200));
+                // inMat_t.copyTo(inMat);
 
                 cv::cuda::HostMem unDist1(height, width, CV_8UC1);
                 cv::cuda::HostMem unDist2(height, width, CV_8UC1);
@@ -163,7 +180,7 @@ int main(int argc, char** argv) {
 
 
                 src1.upload(inMat, cam1Stream);
-                src2.upload(inMat, cam2Stream);
+                src2.upload(inMat2, cam2Stream);
 
                 cv::cuda::cvtColor(src1, rgb1, cv::COLOR_BayerRG2BGR, 0, cam1Stream);
                 cv::cuda::remap(rgb1, uDist1, map1_cuda, map2_cuda, interpMode, 0, cv::Scalar(), cam1Stream);
@@ -213,7 +230,8 @@ int main(int argc, char** argv) {
 
                 cv::waitKey(1);
 
-                camera->clearResult();
+                camera1->clearResult();
+                camera2->clearResult();
             }
             else
             {
@@ -229,8 +247,9 @@ int main(int argc, char** argv) {
         exitCode = 1;
     }
 
-    camera->finalizeLibrary();
-    delete camera.release();
+    camera1->finalizeLibrary();
+    delete camera1.release();
+    delete camera2.release();
 
     return 0;
 }
