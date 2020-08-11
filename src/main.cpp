@@ -193,7 +193,10 @@ int main(int argc, char** argv) {
                     cv::Mat tvec;
                     cv::Mat rvec;
 
-                    bool ret = cv::solvePnP(conePoints, coneROI.keypoints, cameraMatrix, distCoeffs, rvec, tvec, false, cv::SolvePnPMethod::SOLVEPNP_IPPE);
+                    std::vector<cv::Point3f> cone4 (conePoints.begin()+1, conePoints.end()-2);
+                    std::vector<cv::Point2f> key4  (coneROI.keypoints.begin()+1, coneROI.keypoints.end()-2);
+
+                    bool ret = cv::solvePnP(cone4, key4, cameraMatrix, distCoeffs, rvec, tvec, false, cv::SolvePnPMethod::SOLVEPNP_IPPE);
                     if (true) {
                         std::stringstream outputString;
                         outputString << std::setfill('0') << std::setw(8) 
