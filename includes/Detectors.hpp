@@ -29,5 +29,5 @@ class Detectors {
         Detectors();
         ~Detectors();
         void initialize(std::string objectModel, std::string featureModel);
-        void detectFrame(const cv::cuda::GpuMat &imageFrameGpu, std::vector<ConeROI> &coneROIs);
+        void detectFrame(const cv::Mat &imageFrame, std::vector<ConeROI> &coneROIs);
 };

@@ -30,10 +30,7 @@ void Detectors::initialize(std::string objectModel, std::string featureModel) {
     detNN->init(objectModel, n_classes, n_batch);
 }
 
-void Detectors::detectFrame(const cv::cuda::GpuMat &imageFrameGpu, std::vector<ConeROI> &coneROIs) {
-    cv::Mat imageFrame(1920, 1200, CV_8UC3);
-    imageFrameGpu.download(imageFrame);
-
+void Detectors::detectFrame(const cv::Mat &imageFrame, std::vector<ConeROI> &coneROIs) {
     std::vector<cv::Mat> batch_frame;
     std::vector<cv::Mat> batch_dnn_input;
 
