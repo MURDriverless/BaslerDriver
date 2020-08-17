@@ -87,8 +87,8 @@ void Detectors::detectFrame(const cv::Mat &imageFrame, std::vector<ConeROI> &con
         }
     }
 
-    cv::imshow("Camera_Undist", batch_frame[0]);
-    cv::resizeWindow("Camera_Undist", 1200, 600);
+    cv::imshow("Camera_Undist1", batch_frame[0]);
+    cv::resizeWindow("Camera_Undist1", 1000, 600);
 
     cv::waitKey(1);
 

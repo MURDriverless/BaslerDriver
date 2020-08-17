@@ -1,23 +1,25 @@
 <?xml version="1.0"?>
 <opencv_storage>
 <!--
-Calibration date: Sat Jul 25 19:46:18 2020
+Calibration date: Thu Aug 13 18:46:21 2020
 Number of frames: 50
-RMS: 2.58001
+RMS: 2.52329
 -->
 <cameraMatrix type_id="opencv-matrix">
   <rows>3</rows>
   <cols>3</cols>
   <dt>d</dt>
   <data>
-    1.0698664548134150e+03 0. 9.7640782397363637e+02 0.
-    1.0610954870464004e+03 6.2506014678766064e+02 0. 0. 1.</data></cameraMatrix>
+    1.0521286707583322e+03 0. 6.4923559435407242e+02 0.
+    1.0480237980953759e+03 4.6965475749751704e+02 0. 0. 1.</data></cameraMatrix>
 <distCoeffs type_id="opencv-matrix">
   <rows>1</rows>
   <cols>5</cols>
   <dt>d</dt>
   <data>
-    -1.5931027611938575e-01 2.9099392137563929e-01
-    -2.6063338918592830e-04 6.4915085280112071e-05
-    -1.4112559730193877e-01</data></distCoeffs>
+    -1.0169429222254044e-01 1.7851884145727367e-01
+    2.3628995932359724e-03 -1.2813145639650155e-03
+    -1.0458878179782304e-01</data></distCoeffs>
+<calibImageSize>
+  1312 834</calibImageSize>
 </opencv_storage>
