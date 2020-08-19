@@ -316,9 +316,7 @@ int main(int argc, char** argv) {
 
                             uint32_t yDelta = projRect.height * 0.1;
 
-                            for (const cv::DMatch &match: matches) {
-                                std::cout << match.queryIdx << ", " << match.trainIdx << std::endl;
-                                
+                            for (const cv::DMatch &match : matches) {
                                 if (abs(featureKeypoints1[match.queryIdx].pt.y - featureKeypoints2[match.trainIdx].pt.y) < yDelta) {
                                     matchesFilt.push_back(match);
                                 }
