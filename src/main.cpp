@@ -270,11 +270,6 @@ int main(int argc, char** argv) {
                         int x_p = coneROI.roiRect.x - width1/2;
                         int x_pp = (f2/est_depth) * (est_depth/f1 * x_p - B);
 
-                        std::cout << width1 << std::endl;
-                        std::cout << width2 << std::endl;
-                        std::cout << x_p << std::endl;
-                        std::cout << x_pp << std::endl;
-
                         projRect.x = x_pp + width2/2;
 
                         // projRect.x -= coneROI.roiRect.width * border;
