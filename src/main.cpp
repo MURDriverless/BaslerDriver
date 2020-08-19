@@ -353,7 +353,7 @@ int main(int argc, char** argv) {
                             cv::Mat imgMatch;
                             cv::drawMatches(unDist1_cropped, featureKeypoints1, unDist2_cropped, featureKeypoints2, matchesFilt, imgMatch);
                             // cv::drawKeypoints(unDist1_cropped, featureKeypoints1, imgMatch);
-
+   
                             cv::imshow("Matches", imgMatch);
                             cv::resizeWindow("Matches", 1000, 600);
 
