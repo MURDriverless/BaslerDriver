@@ -322,6 +322,34 @@ int main(int argc, char** argv) {
                                 }
                             }
 
+                            std::vector<float> disparity;
+                            for (const cv::DMatch &match : matchesFilt) {
+                                float x1 = featureKeypoints1[match.queryIdx].pt.x;
+                                x1 += coneROI.roiRect.x;
+                                x1 -= width1/2;
+
+                                float x2 = featureKeypoints2[match.trainIdx].pt.x;
+                                x2 += projRect.x;
+                                x2 -= width2/2;
+
+                                disparity.push_back(x1*f2/f1 - x2);
+                            }
+
+                            std::sort(disparity.begin(), disparity.end());
+
+                            if (disparity.size() < 1) {
+                                continue;
+                            }
+
+                            float medDisp = disparity[(int) disparity.size()/2];
+                            float zEst = B*f2/medDisp;
+                            float xEst = zEst*(coneROI.roiRect.x + coneROI.roiRect.width/2 - width1/2)/f1;
+
+                            std::cout << "Refined Pos (x, y, z): (" << xEst << ", "
+                            << 0 << ", " <<  zEst << ")" << std::endl;
+
+                            // std::cout << "Median Disp: " << disparity[(int) disparity.size()/2] << std::endl; 
+
                             cv::Mat imgMatch;
                             cv::drawMatches(unDist1_cropped, featureKeypoints1, unDist2_cropped, featureKeypoints2, matchesFilt, imgMatch);
                             // cv::drawKeypoints(unDist1_cropped, featureKeypoints1, imgMatch);
