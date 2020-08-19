@@ -255,9 +255,9 @@ int main(int argc, char** argv) {
 
                         est_depth = tvec.at<double>(2, 0);
 
-                        double f1 = 1041.67;
-                        double f2 = 1250;
-                        double B = 250;
+                        const double f1 = 1041.67;
+                        const double f2 = 1250;
+                        const double B = 250;
 
                         std::cout << "Est Depth: " << est_depth << std::endl;
 
