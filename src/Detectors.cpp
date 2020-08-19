@@ -81,7 +81,6 @@ void Detectors::detectFrame(const cv::Mat &imageFrame, std::vector<ConeROI> &con
             keypoint.x += bboxs[i].x;
 
             cv::circle(batch_frame[0], keypoint, 3, cv::Scalar(0, 255, 0), -1, 8);
-            std::cout << keypoint << std::endl;
 
             coneROIs[i].keypoints.push_back(keypoint);
         }
